@@ -24,6 +24,29 @@
 
 改完推到 `main`。GitHub Pages 会自己更新。浏览器如果还是旧的，刷新一次即可。
 
+## 每篇文献的文件名
+
+精读笔记和 reflection 用同一条规则，从 DOI 得到文件名。不用另写清单。
+
+1. 去掉 `https://doi.org/`，改成小写。
+2. 连续一段不属于 `a-z` 和 `0-9` 的字符（`/`、`.` 都算）换成一个 `-`。
+3. 去掉头尾的 `-`。
+
+`10.1145/3815598.3815699` → `10-1145-3815598-3815699`
+
+- `data/notes/10-1145-3815598-3815699.md`：助手写的精读笔记。用提交放进仓库，页面上没有写按钮。文件开头可以有 YAML（`title`、`doi`、`date`、`source`），页面不显示这段。
+- `data/reflections/10-1145-3815598-3815699.md`：你自己的 reflection。
+
+总表里没有的 DOI，就算文件夹里有文件，也不会单独出一张卡片。
+
+## 写 reflection
+
+文献卡上点「写 reflection」，会打开 GitHub 的新建文件页，文件名和一段模板已经填好（主要观点、我的看法、对我课题的用处、想引用的句子）。已有文件时按钮是「编辑 reflection」，打开的是编辑页。提交时选直接提交到 `main`，不要另开分支。Pages 要一两分钟才更新，刷新就能看到。
+
+有精读笔记或 reflection 时，卡片上会标出来，也可以按这个筛。展开后，精读笔记在上面，你的 reflection 在下面。
+
+页面会问一次 GitHub 这两个文件夹里有哪些文件，用来认出刚提交、Pages 还没更新的那篇。这个接口如果限流或打不开，列表、筛选和已经发布的文件都还在。
+
 ## 本地打开
 
 在仓库根目录：
@@ -55,5 +78,7 @@ python3 -m http.server 8000
 - `index.html`：文献列表，以及各期全文
 - `data/digest-index.md`：总表
 - `data/briefs/`：每一期的原文，加上 `index.json` 清单
+- `data/notes/`：助手写的精读笔记，文件名按 DOI 规则
+- `data/reflections/`：你自己的 reflection，文件名同一套规则
 - `js/vendor/marked.umd.js`：Markdown 解析，放在仓库里，不走 CDN
 - `.nojekyll`：让 GitHub Pages 不要用 Jekyll 处理

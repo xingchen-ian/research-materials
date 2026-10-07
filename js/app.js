@@ -11,6 +11,8 @@
     status: '',
     sort: 'issue',
     q: '',
+    reflect: false,
+    note: false,
     open: new Set(),
     route: null,
     ready: false
@@ -74,16 +76,97 @@
       paper.venue,
       paper.doiLabel,
       paper.doi,
-      paper.topics.join(' ')
+      paper.topics.join(' '),
+      paper.reflection,
+      paper.notes
     ].join('\n').toLowerCase();
     return blob.indexOf(state.q) !== -1;
   }
 
-  function matchPaper(paper, tag, status) {
+  function matchPaper(paper, tag, status, reflect, note) {
     if (!matchQuery(paper)) return false;
     if (tag && paper.topics.indexOf(tag) === -1) return false;
     if (status && paper.status !== status) return false;
+    const wantReflection = reflect === undefined ? state.reflect : reflect;
+    const wantNote = note === undefined ? state.note : note;
+    if (wantReflection && !paper.hasReflection) return false;
+    if (wantNote && !paper.hasNotes) return false;
     return true;
+  }
+
+  const GITHUB_REPO = 'xingchen-ian/research-materials';
+
+  function todayStamp() {
+    const d = new Date();
+    const month = String(d.getMonth() + 1);
+    const day = String(d.getDate());
+    return d.getFullYear() + '-' + (month.length < 2 ? '0' + month : month) + '-' + (day.length < 2 ? '0' + day : day);
+  }
+
+  function reflectionTemplate(paper) {
+    return [
+      '# ' + (paper.title || '精读'),
+      '',
+      '- DOI：' + (paper.doiLabel || paper.doi),
+      '- 作者：' + (paper.authors || ''),
+      '- 年份：' + (paper.yearLabel || ''),
+      '- 日期：' + todayStamp(),
+      '',
+      '## 主要观点',
+      '',
+      '',
+      '## 我的看法',
+      '',
+      '',
+      '## 对我课题的用处',
+      '',
+      '',
+      '## 想引用的句子',
+      '',
+      ''
+    ].join('\n');
+  }
+
+  function reflectionHref(paper) {
+    const file = 'data/reflections/' + paper.slug + '.md';
+    if (paper.hasReflection) {
+      return 'https://github.com/' + GITHUB_REPO + '/edit/main/' + file;
+    }
+    return 'https://github.com/' + GITHUB_REPO + '/new/main?filename=' +
+      encodeURIComponent(file) + '&value=' + encodeURIComponent(reflectionTemplate(paper));
+  }
+
+  function reflectionActions(paper, withHint) {
+    if (!paper.slug) {
+      return '<p class="reflect-hint">这篇没有 DOI，写不了 reflection。</p>';
+    }
+    const label = paper.hasReflection ? '编辑 reflection' : '写 reflection';
+    const hint = withHint
+      ? '<p class="reflect-hint">在 GitHub 里直接提交到 main。网页要一两分钟才更新，然后刷新。</p>'
+      : '';
+    return '<div class="reflect-actions"><a class="reflect-btn" href="' + esc(reflectionHref(paper)) + '" target="_blank" rel="noopener noreferrer">' +
+      label + '<span class="sr-only">（新窗口，GitHub）</span></a>' + hint + '</div>';
+  }
+
+  function sideDoc(kind, title, pending, body, extra) {
+    if (pending || !String(body || '').trim()) {
+      const msg = pending
+        ? '文件已经在仓库里，Pages 还在更新。一两分钟后刷新。'
+        : '这篇还没有正文。';
+      return '<div class="side-doc ' + kind + '"><p class="reflect-kicker">' + title + '</p><p class="muted">' + msg + '</p>' + (extra || '') + '</div>';
+    }
+    return '<div class="side-doc ' + kind + '"><p class="reflect-kicker">' + title + '</p><div class="markdown">' +
+      renderMarkdown(body) + '</div>' + (extra || '') + '</div>';
+  }
+
+  function notesBlock(paper) {
+    if (!paper.hasNotes) return '';
+    return sideDoc('reading-notes', '精读笔记', paper.notesPending, paper.notes, '');
+  }
+
+  function reflectionBlock(paper) {
+    if (!paper.hasReflection) return '';
+    return sideDoc('reflection', '我的 reflection', paper.reflectionPending, paper.reflection, reflectionActions(paper, false));
   }
 
   function sortedPapers(list) {
@@ -176,17 +259,22 @@
       : '';
     const open = state.open.has(String(paper.n)) ? ' open' : '';
     return (
-      '<article class="card">' +
+      '<article class="card' + (paper.hasNotes ? ' has-notes' : '') + (paper.hasReflection ? ' has-reflection' : '') + '">' +
         '<div class="card-top">' +
           '<span class="num">' + esc(paper.n) + '</span>' +
           '<span class="issue-slot">期 ' + issue + '</span>' +
-          '<span class="status" data-status="' + esc(paper.status) + '">' + esc(paper.status || '未标') + '</span>' +
+          '<span class="card-marks">' +
+            (paper.hasNotes ? '<span class="notes-badge">有精读笔记</span>' : '') +
+            (paper.hasReflection ? '<span class="reflect-badge">有 reflection</span>' : '') +
+            '<span class="status" data-status="' + esc(paper.status) + '">' + esc(paper.status || '未标') + '</span>' +
+          '</span>' +
         '</div>' +
         '<h2 class="paper-title">' + esc(paper.title) + '</h2>' +
         '<p class="meta">' + esc(paper.authors) + ' · ' + esc(paper.yearLabel || '年份不详') + ' · ' + esc(paper.venue) + '</p>' +
         '<p class="doi">' + doi + '</p>' +
         (tags ? '<div class="tags">' + tags + '</div>' : '') +
         note +
+        reflectionActions(paper, true) +
         '<details data-id="' + esc(paper.n) + '"' + open + '>' +
           '<summary><span class="when-closed">展开笔记</span><span class="when-open">收起笔记</span></summary>' +
           '<div class="notes">' +
@@ -194,6 +282,8 @@
             '<h3>做了什么</h3>' + did +
             '<h3>跟你的关系</h3>' + rel +
           '</div>' +
+          notesBlock(paper) +
+          reflectionBlock(paper) +
         '</details>' +
       '</article>'
     );
@@ -220,7 +310,7 @@
         '<div class="filters">' +
           '<div class="filter-row">' +
             '<label class="filter-label" for="q">搜索</label>' +
-            '<input id="q" type="search" placeholder="题目、作者、备注或笔记" autocomplete="off" spellcheck="false" enterkeyhint="search" value="' + esc(state.q) + '">' +
+            '<input id="q" type="search" placeholder="题目、作者、备注、笔记或 reflection" autocomplete="off" spellcheck="false" enterkeyhint="search" value="' + esc(state.q) + '">' +
           '</div>' +
           '<div class="filter-row" role="group" aria-label="课题">' +
             '<span class="filter-label">课题</span>' +
@@ -229,6 +319,13 @@
           '<div class="filter-row" role="group" aria-label="状态">' +
             '<span class="filter-label">状态</span>' +
             '<div class="chips">' + statusChips + '</div>' +
+          '</div>' +
+          '<div class="filter-row" role="group" aria-label="补充材料">' +
+            '<span class="filter-label wide">补充</span>' +
+            '<div class="chips">' +
+              chip('有精读笔记', state.note, 'data-filter="note"', 0) +
+              chip('有 reflection', state.reflect, 'data-filter="reflect"', 0) +
+            '</div>' +
           '</div>' +
           '<div class="filter-row">' +
             '<span class="filter-label">排序</span>' +
@@ -258,6 +355,18 @@
 
   function onPapersClick(event) {
     const chipBtn = event.target.closest('.chip');
+    if (chipBtn && chipBtn.dataset.filter === 'reflect') {
+      state.reflect = !state.reflect;
+      syncPressed();
+      renderPaperList();
+      return;
+    }
+    if (chipBtn && chipBtn.dataset.filter === 'note') {
+      state.note = !state.note;
+      syncPressed();
+      renderPaperList();
+      return;
+    }
     if (chipBtn && chipBtn.dataset.filter) {
       const key = chipBtn.dataset.filter === 'tag' ? 'tag' : 'status';
       state[key] = chipBtn.dataset.value || '';
@@ -283,6 +392,8 @@
       state.tag = '';
       state.status = '';
       state.q = '';
+      state.reflect = false;
+      state.note = false;
       const input = document.getElementById('q');
       if (input) input.value = '';
       syncPressed();
@@ -299,6 +410,12 @@
     });
     document.querySelectorAll('[data-sort]').forEach(function (btn) {
       btn.setAttribute('aria-pressed', String(btn.dataset.sort === state.sort));
+    });
+    document.querySelectorAll('[data-filter="reflect"]').forEach(function (btn) {
+      btn.setAttribute('aria-pressed', String(!!state.reflect));
+    });
+    document.querySelectorAll('[data-filter="note"]').forEach(function (btn) {
+      btn.setAttribute('aria-pressed', String(!!state.note));
     });
   }
 
@@ -329,9 +446,26 @@
     } else {
       count.textContent = '共 ' + state.papers.length + ' 篇，当前 ' + shown.length + ' 篇';
     }
-    clear.hidden = !(state.tag || state.status || state.q);
+    document.querySelectorAll('[data-filter="reflect"]').forEach(function (btn) {
+      const n = state.papers.filter(function (paper) {
+        return matchPaper(paper, state.tag, state.status, false) && paper.hasReflection;
+      }).length;
+      const num = btn.querySelector('.n');
+      if (num) num.textContent = String(n);
+    });
+    document.querySelectorAll('[data-filter="note"]').forEach(function (btn) {
+      const n = state.papers.filter(function (paper) {
+        return matchPaper(paper, state.tag, state.status, undefined, false) && paper.hasNotes;
+      }).length;
+      const num = btn.querySelector('.n');
+      if (num) num.textContent = String(n);
+    });
+    clear.hidden = !(state.tag || state.status || state.q || state.reflect || state.note);
     if (!shown.length) {
-      list.innerHTML = '<p class="empty">没有符合的文献。换个词，或把课题和状态改回「全部」。</p>';
+      let emptyText = '没有符合的文献。换个词，或把课题和状态改回「全部」。';
+      if (!state.tag && !state.status && !state.q && state.note && !state.reflect) emptyText = '还没有精读笔记。';
+      else if (!state.tag && !state.status && !state.q && state.reflect && !state.note) emptyText = '还没有 reflection。';
+      list.innerHTML = '<p class="empty">' + emptyText + '</p>';
       return;
     }
     list.innerHTML = shown.map(paperCard).join('');
@@ -458,14 +592,80 @@
         return Promise.all(jobs).then(function (issues) {
           const papers = DigestParse.parseIndex(indexMd);
           attachNotes(papers, issues);
-          state.papers = papers;
-          state.issues = issues;
-          state.ready = true;
-          renderRoute();
+          papers.forEach(function (paper) {
+            paper.slug = DigestParse.doiSlug(paper.doi);
+            paper.reflection = '';
+            paper.hasReflection = false;
+            paper.reflectionPending = false;
+            paper.notes = '';
+            paper.hasNotes = false;
+            paper.notesPending = false;
+          });
+          return Promise.all([
+            loadSideFiles(papers, 'reflections', function (paper, text, pending) {
+              paper.hasReflection = true;
+              paper.reflectionPending = pending;
+              paper.reflection = pending ? '' : text;
+            }),
+            loadSideFiles(papers, 'notes', function (paper, text, pending) {
+              paper.hasNotes = true;
+              paper.notesPending = pending;
+              paper.notes = pending ? '' : DigestParse.stripFrontmatter(text);
+            })
+          ]).then(function () {
+            state.papers = papers;
+            state.issues = issues;
+            state.ready = true;
+            renderRoute();
+          });
         });
       });
     }).catch(function (err) {
       showError('没有读到数据。' + (err && err.message ? err.message : '请用静态服务器打开这个目录。'));
+    });
+  }
+
+  function fetchFolderNames(folder) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(function () { ctrl.abort(); }, 4000);
+    return fetch('https://api.github.com/repos/' + GITHUB_REPO + '/contents/data/' + folder + '?ref=main', {
+      headers: { Accept: 'application/vnd.github+json' },
+      cache: 'no-store',
+      signal: ctrl.signal
+    }).then(function (res) {
+      clearTimeout(timer);
+      if (res.status === 404) return [];
+      if (!res.ok) return null;
+      return res.json().then(function (items) {
+        if (!Array.isArray(items)) return null;
+        return items.filter(function (item) {
+          return item && item.type === 'file' && typeof item.name === 'string' && /\.md$/i.test(item.name);
+        }).map(function (item) {
+          return item.name.replace(/\.md$/i, '');
+        });
+      }).catch(function () { return null; });
+    }).catch(function () {
+      clearTimeout(timer);
+      return null;
+    });
+  }
+
+  function loadSideFiles(papers, folder, apply) {
+    return fetchFolderNames(folder).then(function (names) {
+      return Promise.all(papers.map(function (paper) {
+        if (!paper.slug) return Promise.resolve();
+        const listed = !!(names && names.indexOf(paper.slug) !== -1);
+        if (names && !listed) return Promise.resolve();
+        return fetch('data/' + folder + '/' + paper.slug + '.md', { cache: 'no-cache' }).then(function (res) {
+          if (!res.ok) {
+            if (listed) apply(paper, '', true);
+            return;
+          }
+          return res.text().then(function (text) { apply(paper, text, false); });
+        }).catch(function () {
+          if (listed) apply(paper, '', true);
+        });
+      }));
     });
   }
 

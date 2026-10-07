@@ -159,8 +159,26 @@
     };
   }
 
+  function doiSlug(raw) {
+    const doi = normalizeDoi(raw);
+    if (!doi) return '';
+    return doi.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  }
+
+  function stripFrontmatter(markdown) {
+    const text = String(markdown || '').replace(/^\uFEFF/, '');
+    const lines = text.split(/\r?\n/);
+    if (!lines.length || lines[0].trim() !== '---') return text;
+    for (let i = 1; i < lines.length; i++) {
+      if (lines[i].trim() === '---') return lines.slice(i + 1).join('\n').replace(/^\n/, '');
+    }
+    return text;
+  }
+
   root.DigestParse = {
     normalizeDoi: normalizeDoi,
+    doiSlug: doiSlug,
+    stripFrontmatter: stripFrontmatter,
     parseIndex: parseIndex,
     parseBrief: parseBrief,
     parseIssueMeta: parseIssueMeta
