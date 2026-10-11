@@ -42,7 +42,7 @@
     return { doi: '', doiLabel: '', doiHref: '' };
   }
 
-  function parseIndex(markdown) {
+  function parseIndex(markdown, mode) {
     const lines = String(markdown || '').replace(/^\uFEFF/, '').split(/\r?\n/);
     let headerIdx = -1;
     for (let i = 0; i < lines.length; i++) {
@@ -55,11 +55,18 @@
       throw new Error('文献表里没有找到表头。需要有「题目」和「状态」两列。');
     }
     const headers = splitRow(lines[headerIdx]);
-    const need = ['#', '题目', '作者', '年份', 'Venue', 'DOI', '课题', '期', '状态', '备注'];
+    const flexible = mode === 'flexible';
+    const need = flexible
+      ? ['#', '题目', '作者', '年份', 'Venue', 'DOI', '状态']
+      : ['#', '题目', '作者', '年份', 'Venue', 'DOI', '课题', '期', '状态', '备注'];
     for (let n = 0; n < need.length; n++) {
       if (headers.indexOf(need[n]) === -1) {
         throw new Error('文献表缺少列：「' + need[n] + '」。');
       }
+    }
+    const topicCol = headers.indexOf('课题') !== -1 ? '课题' : (headers.indexOf('标签') !== -1 ? '标签' : '');
+    if (flexible && !topicCol) {
+      throw new Error('文献表缺少列：「标签」。');
     }
     const papers = [];
     for (let i = headerIdx + 1; i < lines.length; i++) {
@@ -78,7 +85,7 @@
       const doiCell = parseDoiCell(row['DOI']);
       if (!title && !doiCell.doi) continue;
       const year = parseInt(row['年份'], 10);
-      const topics = row['课题'].split(/[；;]/).map(function (s) {
+      const topics = String(row[topicCol] || '').split(/[；;]/).map(function (s) {
         return s.trim();
       }).filter(Boolean);
       papers.push({
@@ -92,9 +99,9 @@
         doiLabel: doiCell.doiLabel,
         doiHref: doiCell.doiHref,
         topics: topics,
-        issueLabel: row['期'],
+        issueLabel: row['期'] || '',
         status: row['状态'],
-        note: row['备注']
+        note: row['备注'] || ''
       });
     }
     return papers;

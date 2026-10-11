@@ -14,6 +14,10 @@
     reflect: false,
     note: false,
     open: new Set(),
+    topics: [],
+    topicTag: '',
+    topicStatus: '',
+    topicQ: '',
     route: null,
     ready: false
   };
@@ -195,6 +199,8 @@
     const parts = raw.split('/').filter(Boolean).map(decodeURIComponent);
     if (parts[0] === 'issues' && parts[1]) return { name: 'issue', date: parts[1] };
     if (parts[0] === 'issues') return { name: 'issues' };
+    if (parts[0] === 'topics' && parts[1]) return { name: 'topic', id: parts[1] };
+    if (parts[0] === 'topics') return { name: 'topics' };
     return { name: 'papers' };
   }
 
@@ -354,6 +360,30 @@
   }
 
   function onPapersClick(event) {
+    const topicChip = event.target.closest('[data-topic-filter]');
+    if (topicChip) {
+      const key = topicChip.dataset.topicFilter === 'tag' ? 'topicTag' : 'topicStatus';
+      state[key] = topicChip.dataset.value || '';
+      renderTopicPapers();
+      return;
+    }
+    const topicTagBtn = event.target.closest('[data-topic-tag]');
+    if (topicTagBtn) {
+      state.topicTag = topicTagBtn.dataset.topicTag || '';
+      renderTopicPapers();
+      const topicHead = document.getElementById('topic-papers');
+      if (topicHead) topicHead.scrollIntoView({ block: 'start' });
+      return;
+    }
+    if (event.target.closest('#topic-clear')) {
+      state.topicTag = '';
+      state.topicStatus = '';
+      state.topicQ = '';
+      const topicInput = document.getElementById('topic-q');
+      if (topicInput) topicInput.value = '';
+      renderTopicPapers();
+      return;
+    }
     const chipBtn = event.target.closest('.chip');
     if (chipBtn && chipBtn.dataset.filter === 'reflect') {
       state.reflect = !state.reflect;
@@ -501,6 +531,213 @@
       '</section>';
   }
 
+  function findTopic(id) {
+    for (let i = 0; i < state.topics.length; i++) {
+      if (state.topics[i].id === id) return state.topics[i];
+    }
+    return null;
+  }
+
+  function topicLabels(papers) {
+    const seen = Object.create(null);
+    const out = [];
+    papers.forEach(function (paper) {
+      paper.topics.forEach(function (name) {
+        if (name && !seen[name]) {
+          seen[name] = true;
+          out.push(name);
+        }
+      });
+    });
+    return out;
+  }
+
+  function topicMatches(paper, tag, status) {
+    if (tag && paper.topics.indexOf(tag) === -1) return false;
+    if (status && paper.status !== status) return false;
+    if (state.topicQ) {
+      const blob = [
+        paper.title,
+        paper.authors,
+        paper.note,
+        paper.venue,
+        paper.doiLabel,
+        paper.doi,
+        paper.topics.join(' ')
+      ].join('\n').toLowerCase();
+      if (blob.indexOf(state.topicQ) === -1) return false;
+    }
+    return true;
+  }
+
+  function visibleTopicPapers(topic) {
+    return topic.papers.filter(function (paper) {
+      return topicMatches(paper, state.topicTag, state.topicStatus);
+    }).slice().sort(function (a, b) {
+      return a.n - b.n;
+    });
+  }
+
+  function topicPaperCard(paper) {
+    const tags = paper.topics.map(function (topic) {
+      return '<button type="button" class="tag" data-topic-tag="' + esc(topic) + '">' + esc(topic) + '</button>';
+    }).join('');
+    const doiHref = safeHref(paper.doiHref);
+    const doi = doiHref
+      ? '<a href="' + esc(doiHref) + '" target="_blank" rel="noopener noreferrer">' + esc(paper.doiLabel || paper.doi) + '<span class="sr-only">（新窗口打开）</span></a>'
+      : '<span class="muted">没有 DOI</span>';
+    const note = paper.note
+      ? '<p class="remark"><span class="k">备注</span> ' + esc(paper.note) + '</p>'
+      : '';
+    return (
+      '<article class="card topic-paper">' +
+        '<div class="card-top">' +
+          '<span class="num">' + esc(paper.n) + '</span>' +
+          '<span class="topic-badge">专题</span>' +
+          '<span class="card-marks">' +
+            '<span class="status" data-status="' + esc(paper.status) + '">' + esc(paper.status || '未标') + '</span>' +
+          '</span>' +
+        '</div>' +
+        '<h3 class="paper-title">' + esc(paper.title) + '</h3>' +
+        '<p class="meta">' + esc(paper.authors) + ' · ' + esc(paper.yearLabel || '年份不详') + ' · ' + esc(paper.venue) + '</p>' +
+        '<p class="doi">' + doi + '</p>' +
+        (tags ? '<div class="tags">' + tags + '</div>' : '') +
+        note +
+      '</article>'
+    );
+  }
+
+  function renderTopicPapers() {
+    const topic = state.route && state.route.name === 'topic' ? findTopic(state.route.id) : null;
+    const list = document.getElementById('topic-list');
+    const count = document.getElementById('topic-count');
+    const clear = document.getElementById('topic-clear');
+    if (!topic || !list || !count || !clear) return;
+    document.querySelectorAll('[data-topic-filter="tag"]').forEach(function (btn) {
+      btn.setAttribute('aria-pressed', String((btn.dataset.value || '') === state.topicTag));
+      const value = btn.dataset.value || '';
+      const n = topic.papers.filter(function (paper) {
+        return topicMatches(paper, value, state.topicStatus);
+      }).length;
+      const num = btn.querySelector('.n');
+      if (num) num.textContent = String(n);
+    });
+    document.querySelectorAll('[data-topic-filter="status"]').forEach(function (btn) {
+      btn.setAttribute('aria-pressed', String((btn.dataset.value || '') === state.topicStatus));
+      const value = btn.dataset.value || '';
+      const n = topic.papers.filter(function (paper) {
+        return topicMatches(paper, state.topicTag, value);
+      }).length;
+      const num = btn.querySelector('.n');
+      if (num) num.textContent = String(n);
+    });
+    const shown = visibleTopicPapers(topic);
+    if (shown.length === topic.papers.length) {
+      count.textContent = '共 ' + topic.papers.length + ' 篇';
+    } else {
+      count.textContent = '共 ' + topic.papers.length + ' 篇，当前 ' + shown.length + ' 篇';
+    }
+    clear.hidden = !(state.topicTag || state.topicStatus || state.topicQ);
+    if (!shown.length) {
+      list.innerHTML = '<p class="empty">没有符合的文献。换个词，或把标签和状态改回「全部」。</p>';
+      return;
+    }
+    list.innerHTML = shown.map(topicPaperCard).join('');
+  }
+
+  function renderTopicList() {
+    if (!state.topics.length) {
+      app.innerHTML =
+        '<section id="topics">' +
+          '<h2 class="view-title">专题</h2>' +
+          '<p class="view-lead">专题 = 按问题整理的摸底；各期摘要 = 按日期扫文献。</p>' +
+          '<p class="empty">还没有专题。</p>' +
+        '</section>';
+      return;
+    }
+    const cards = state.topics.map(function (topic) {
+      return (
+        '<li>' +
+          '<a class="issue-card topic-card" href="#/topics/' + esc(topic.id) + '">' +
+            '<div class="issue-card-top">' +
+              '<span class="topic-badge">专题</span>' +
+              '<span class="topic-card-title">' + esc(topic.title) + '</span>' +
+              (topic.date ? '<time datetime="' + esc(topic.date) + '">' + esc(topic.date) + '</time>' : '') +
+              '<span class="issue-count">' + topic.papers.length + ' 篇</span>' +
+            '</div>' +
+            '<p class="concl">这是专项摸底，不是某期摘要。</p>' +
+          '</a>' +
+        '</li>'
+      );
+    }).join('');
+    app.innerHTML =
+      '<section id="topics">' +
+        '<h2 class="view-title">专题</h2>' +
+        '<p class="view-lead">专题 = 按问题整理的摸底；各期摘要 = 按日期扫文献。</p>' +
+        '<ul class="issue-list">' + cards + '</ul>' +
+      '</section>';
+  }
+
+  function renderTopic(id) {
+    const topic = findTopic(id);
+    if (!topic) {
+      app.innerHTML =
+        '<section id="topic">' +
+          '<p class="back"><a href="#/topics">返回专题</a></p>' +
+          '<p class="empty">没有这个专题。</p>' +
+        '</section>';
+      return;
+    }
+    const labels = topicLabels(topic.papers);
+    const statuses = orderedLabels(STATUS_ORDER, topic.papers.map(function (paper) {
+      return paper.status;
+    }).filter(Boolean));
+    const tagChips = chip('全部', state.topicTag === '', 'data-topic-filter="tag" data-value=""', 0) +
+      labels.map(function (label) {
+        return chip(label, state.topicTag === label, 'data-topic-filter="tag" data-value="' + esc(label) + '"', 0);
+      }).join('');
+    const statusChips = chip('全部', state.topicStatus === '', 'data-topic-filter="status" data-value=""', 0) +
+      statuses.map(function (status) {
+        return chip(status, state.topicStatus === status, 'data-topic-filter="status" data-value="' + esc(status) + '"', 0);
+      }).join('');
+    app.innerHTML =
+      '<section id="topic">' +
+        '<p class="back"><a href="#/topics">返回专题</a></p>' +
+        '<p class="topic-kicker"><span class="topic-badge">专题</span></p>' +
+        '<h2 class="view-title">' + esc(topic.title) + '</h2>' +
+        '<p class="view-lead">这是专项摸底，不是某期摘要' +
+          (topic.date ? '（' + esc(topic.date) + '）' : '') +
+        '。</p>' +
+        '<article class="markdown">' + renderMarkdown(topic.brief) + '</article>' +
+        '<h2 class="section-title" id="topic-papers">专项文献</h2>' +
+        '<p class="topic-note">这张表只属于这个专题，不并进主文献表，也不是某一期摘要。</p>' +
+        '<div class="filters">' +
+          '<div class="filter-row">' +
+            '<label class="filter-label" for="topic-q">搜索</label>' +
+            '<input id="topic-q" type="search" placeholder="题目、作者或备注" autocomplete="off" spellcheck="false" enterkeyhint="search" value="' + esc(state.topicQ) + '">' +
+          '</div>' +
+          '<div class="filter-row" role="group" aria-label="标签">' +
+            '<span class="filter-label">标签</span>' +
+            '<div class="chips">' + tagChips + '</div>' +
+          '</div>' +
+          '<div class="filter-row" role="group" aria-label="状态">' +
+            '<span class="filter-label">状态</span>' +
+            '<div class="chips">' + statusChips + '</div>' +
+          '</div>' +
+          '<div class="filter-row">' +
+            '<p class="count" id="topic-count" aria-live="polite"></p>' +
+            '<button type="button" class="text-btn" id="topic-clear" hidden>清除筛选</button>' +
+          '</div>' +
+        '</div>' +
+        '<div id="topic-list"></div>' +
+      '</section>';
+    document.getElementById('topic-q').addEventListener('input', function (event) {
+      state.topicQ = event.target.value.trim().toLowerCase();
+      renderTopicPapers();
+    });
+    renderTopicPapers();
+  }
+
   function renderIssue(date) {
     const issue = state.issues.filter(function (item) { return item.date === date; })[0];
     if (!issue) {
@@ -522,9 +759,11 @@
     if (!state.ready) return;
     const next = parseHash();
     const prev = state.route;
-    const changed = !prev || prev.name !== next.name || prev.date !== next.date;
+    const changed = !prev || prev.name !== next.name || prev.date !== next.date || prev.id !== next.id;
     state.route = next;
-    const nav = next.name === 'papers' ? 'papers' : 'issues';
+    let nav = 'papers';
+    if (next.name === 'issues' || next.name === 'issue') nav = 'issues';
+    else if (next.name === 'topics' || next.name === 'topic') nav = 'topics';
     setCurrentNav(nav);
     if (next.name === 'papers') {
       document.title = '调研材料';
@@ -532,6 +771,13 @@
     } else if (next.name === 'issues') {
       document.title = '调研材料 · 各期摘要';
       renderIssueList();
+    } else if (next.name === 'topics') {
+      document.title = '调研材料 · 专题';
+      renderTopicList();
+    } else if (next.name === 'topic') {
+      const topic = findTopic(next.id);
+      document.title = '调研材料 · ' + (topic ? topic.title : '专题');
+      renderTopic(next.id);
     } else {
       document.title = '调研材料 · ' + next.date;
       renderIssue(next.date);
@@ -611,10 +857,12 @@
               paper.hasNotes = true;
               paper.notesPending = pending;
               paper.notes = pending ? '' : DigestParse.stripFrontmatter(text);
-            })
-          ]).then(function () {
+            }),
+            loadTopics()
+          ]).then(function (loaded) {
             state.papers = papers;
             state.issues = issues;
+            state.topics = loaded[2] || [];
             state.ready = true;
             renderRoute();
           });
@@ -622,6 +870,38 @@
       });
     }).catch(function (err) {
       showError('没有读到数据。' + (err && err.message ? err.message : '请用静态服务器打开这个目录。'));
+    });
+  }
+
+  function loadTopics() {
+    return fetchText('data/topics/index.json').then(function (manifestText) {
+      let manifest;
+      try {
+        manifest = JSON.parse(manifestText);
+      } catch (err) {
+        return [];
+      }
+      if (!Array.isArray(manifest)) return [];
+      return Promise.all(manifest.map(function (item) {
+        if (!item || !/^[a-z0-9-]+$/.test(item.id)) return null;
+        if (!/^[A-Za-z0-9._-]+$/.test(item.brief) || !/^[A-Za-z0-9._-]+$/.test(item.index)) return null;
+        return Promise.all([
+          fetchText('data/topics/' + item.brief),
+          fetchText('data/topics/' + item.index)
+        ]).then(function (pair) {
+          return {
+            id: item.id,
+            title: item.title || item.id,
+            date: /^\d{4}-\d{2}-\d{2}$/.test(item.date) ? item.date : '',
+            brief: pair[0],
+            papers: DigestParse.parseIndex(pair[1], 'flexible')
+          };
+        });
+      })).then(function (rows) {
+        return rows.filter(Boolean);
+      });
+    }).catch(function () {
+      return [];
     });
   }
 

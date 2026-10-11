@@ -465,6 +465,35 @@ details[open] .when-open { display: inline; }
 
 .issue-no { color: var(--pine); }
 
+.topic-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.08rem 0.48rem;
+  background: #3d2a4a;
+  color: #f7f2ea;
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  line-height: 1.7;
+}
+
+.topic-card { box-shadow: inset 3px 0 0 #3d2a4a; }
+
+.topic-card-title {
+  font-family: var(--serif);
+  font-size: 1.12rem;
+  font-weight: 600;
+}
+
+.section-title {
+  margin: 2rem 0 0.35rem;
+  font-size: 1.12rem;
+  font-weight: 600;
+  scroll-margin-top: 6rem;
+}
+
+.topic-note { margin: 0 0 0.9rem; color: var(--muted); }
+
 .issue-count {
   margin-left: auto;
   color: var(--muted);
@@ -523,6 +552,23 @@ details[open] .when-open { display: inline; }
 }
 
 .markdown strong { font-weight: 600; }
+
+.markdown table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.8rem 0 1rem;
+  font-size: 0.9rem;
+}
+
+.markdown th,
+.markdown td {
+  border: 1px solid var(--line);
+  padding: 0.4rem 0.55rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown th { background: #efeae1; font-weight: 600; }
 
 .markdown code {
   font-family: "Noto Sans Mono CJK SC", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;

@@ -24,6 +24,14 @@
 
 改完推到 `main`。GitHub Pages 会自己更新。浏览器如果还是旧的，刷新一次即可。
 
+## 专题
+
+专题和各期摘要分开。专题按问题整理摸底；各期摘要按日期扫文献。专题文献不要写进 `data/digest-index.md`。
+
+清单在 `data/topics/index.json`。每一项写 `id`、`title`、`date`、`brief`、`index`。`brief` 和 `index` 只写文件名，文件放在 `data/topics/`。`id` 用小写字母、数字和 `-`。
+
+打开 `#/topics`。点进一张卡片，上面是摸底简报，下面是这张专题表自己的文献，可以按标签和状态筛。
+
 ## 每篇文献的文件名
 
 精读笔记和 reflection 用同一条规则，从 DOI 得到文件名。不用另写清单。
@@ -75,9 +83,10 @@ python3 -m http.server 8000
 
 ## 文件
 
-- `index.html`：文献列表，以及各期全文
+- `index.html`：文献列表、各期全文，以及专题
 - `data/digest-index.md`：总表
 - `data/briefs/`：每一期的原文，加上 `index.json` 清单
+- `data/topics/`：专题简报和专题文献表，加上 `index.json` 清单
 - `data/notes/`：助手写的精读笔记，文件名按 DOI 规则
 - `data/reflections/`：你自己的 reflection，文件名同一套规则
 - `js/vendor/marked.umd.js`：Markdown 解析，放在仓库里，不走 CDN
