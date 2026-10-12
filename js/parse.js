@@ -88,6 +88,9 @@
       const topics = String(row[topicCol] || '').split(/[；;]/).map(function (s) {
         return s.trim();
       }).filter(Boolean);
+      const gaps = String(row['填补空白'] || '').split(/[；;]/).map(function (s) {
+        return s.trim();
+      }).filter(Boolean);
       papers.push({
         n: parseInt(row['#'], 10) || papers.length + 1,
         title: title,
@@ -99,12 +102,54 @@
         doiLabel: doiCell.doiLabel,
         doiHref: doiCell.doiHref,
         topics: topics,
+        gaps: gaps,
+        newGap: row['新空白'] || '',
         issueLabel: row['期'] || '',
         status: row['状态'],
         note: row['备注'] || ''
       });
     }
     return papers;
+  }
+
+  function parseGapCatalog(markdown) {
+    const lines = String(markdown || '').replace(/^\uFEFF/, '').split(/\r?\n/);
+    let headerIdx = -1;
+    for (let i = 0; i < lines.length; i++) {
+      if (/^\s*\|/.test(lines[i]) && lines[i].indexOf('#') !== -1 && lines[i].indexOf('空白') !== -1) {
+        headerIdx = i;
+        break;
+      }
+    }
+    if (headerIdx < 0) return [];
+    const headers = splitRow(lines[headerIdx]);
+    const nameCol = headers.filter(function (name) {
+      return name.indexOf('空白') !== -1;
+    })[0] || '';
+    const gaps = [];
+    for (let i = headerIdx + 1; i < lines.length; i++) {
+      const line = lines[i];
+      if (!/^\s*\|/.test(line)) {
+        if (gaps.length) break;
+        continue;
+      }
+      if (isSeparator(line)) continue;
+      const cells = splitRow(line);
+      const row = {};
+      headers.forEach(function (name, idx) {
+        row[name] = cells[idx] || '';
+      });
+      const id = String(row['#'] || '').trim();
+      if (!id) continue;
+      gaps.push({
+        id: id,
+        name: nameCol ? row[nameCol] : '',
+        relevance: row['相关度'] || '',
+        fill: row['填补程度（初判）'] || row['填补程度'] || '',
+        note: row['说明'] || ''
+      });
+    }
+    return gaps;
   }
 
   function parseBrief(markdown) {
@@ -187,6 +232,7 @@
     doiSlug: doiSlug,
     stripFrontmatter: stripFrontmatter,
     parseIndex: parseIndex,
+    parseGapCatalog: parseGapCatalog,
     parseBrief: parseBrief,
     parseIssueMeta: parseIssueMeta
   };

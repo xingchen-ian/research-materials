@@ -17,6 +17,7 @@
     topics: [],
     topicTag: '',
     topicStatus: '',
+    topicGap: '',
     topicQ: '',
     route: null,
     ready: false
@@ -362,10 +363,13 @@
   function onPapersClick(event) {
     const topicChip = event.target.closest('[data-topic-filter]');
     if (topicChip) {
-      const key = topicChip.dataset.topicFilter === 'tag' ? 'topicTag' : 'topicStatus';
-      state[key] = topicChip.dataset.value || '';
-      renderTopicPapers();
-      return;
+      const topicKeys = { tag: 'topicTag', status: 'topicStatus', gap: 'topicGap' };
+      const key = topicKeys[topicChip.dataset.topicFilter];
+      if (key) {
+        state[key] = topicChip.dataset.value || '';
+        renderTopicPapers();
+        return;
+      }
     }
     const topicTagBtn = event.target.closest('[data-topic-tag]');
     if (topicTagBtn) {
@@ -378,6 +382,7 @@
     if (event.target.closest('#topic-clear')) {
       state.topicTag = '';
       state.topicStatus = '';
+      state.topicGap = '';
       state.topicQ = '';
       const topicInput = document.getElementById('topic-q');
       if (topicInput) topicInput.value = '';
@@ -552,9 +557,11 @@
     return out;
   }
 
-  function topicMatches(paper, tag, status) {
+  function topicMatches(paper, tag, status, gap) {
+    const useGap = gap === undefined ? state.topicGap : gap;
     if (tag && paper.topics.indexOf(tag) === -1) return false;
     if (status && paper.status !== status) return false;
+    if (useGap && (paper.gaps || []).indexOf(useGap) === -1) return false;
     if (state.topicQ) {
       const blob = [
         paper.title,
@@ -563,11 +570,40 @@
         paper.venue,
         paper.doiLabel,
         paper.doi,
-        paper.topics.join(' ')
+        paper.topics.join(' '),
+        (paper.gaps || []).join(' '),
+        paper.newGap
       ].join('\n').toLowerCase();
       if (blob.indexOf(state.topicQ) === -1) return false;
     }
     return true;
+  }
+
+  function gapOptions(topic) {
+    const seen = Object.create(null);
+    const out = [];
+    (topic.gaps || []).forEach(function (gap) {
+      const id = String(gap.id || '').trim();
+      if (!id || seen[id]) return;
+      seen[id] = true;
+      out.push({ id: id, label: gap.name ? id + ' ' + gap.name : id });
+    });
+    if (!out.length) {
+      for (let n = 1; n <= 6; n++) {
+        const id = String(n);
+        seen[id] = true;
+        out.push({ id: id, label: id });
+      }
+    }
+    topic.papers.forEach(function (paper) {
+      (paper.gaps || []).forEach(function (id) {
+        if (!id || seen[id]) return;
+        seen[id] = true;
+        out.push({ id: id, label: id });
+      });
+    });
+    if (!seen['待归类']) out.push({ id: '待归类', label: '待归类' });
+    return out;
   }
 
   function visibleTopicPapers(topic) {
@@ -589,11 +625,18 @@
     const note = paper.note
       ? '<p class="remark"><span class="k">备注</span> ' + esc(paper.note) + '</p>'
       : '';
+    const fresh = paper.newGap
+      ? '<p class="remark"><span class="k">新空白</span> ' + esc(paper.newGap) + '</p>'
+      : '';
+    const gapBadge = paper.gaps && paper.gaps.length
+      ? '<span class="gap-badge">空白 ' + esc(paper.gaps.join(';')) + '</span>'
+      : '';
     return (
       '<article class="card topic-paper">' +
         '<div class="card-top">' +
           '<span class="num">' + esc(paper.n) + '</span>' +
           '<span class="topic-badge">专题</span>' +
+          gapBadge +
           '<span class="card-marks">' +
             '<span class="status" data-status="' + esc(paper.status) + '">' + esc(paper.status || '未标') + '</span>' +
           '</span>' +
@@ -603,6 +646,7 @@
         '<p class="doi">' + doi + '</p>' +
         (tags ? '<div class="tags">' + tags + '</div>' : '') +
         note +
+        fresh +
       '</article>'
     );
   }
@@ -631,15 +675,24 @@
       const num = btn.querySelector('.n');
       if (num) num.textContent = String(n);
     });
+    document.querySelectorAll('[data-topic-filter="gap"]').forEach(function (btn) {
+      btn.setAttribute('aria-pressed', String((btn.dataset.value || '') === state.topicGap));
+      const value = btn.dataset.value || '';
+      const n = topic.papers.filter(function (paper) {
+        return topicMatches(paper, state.topicTag, state.topicStatus, value);
+      }).length;
+      const num = btn.querySelector('.n');
+      if (num) num.textContent = String(n);
+    });
     const shown = visibleTopicPapers(topic);
     if (shown.length === topic.papers.length) {
       count.textContent = '共 ' + topic.papers.length + ' 篇';
     } else {
       count.textContent = '共 ' + topic.papers.length + ' 篇，当前 ' + shown.length + ' 篇';
     }
-    clear.hidden = !(state.topicTag || state.topicStatus || state.topicQ);
+    clear.hidden = !(state.topicTag || state.topicStatus || state.topicGap || state.topicQ);
     if (!shown.length) {
-      list.innerHTML = '<p class="empty">没有符合的文献。换个词，或把标签和状态改回「全部」。</p>';
+      list.innerHTML = '<p class="empty">没有符合的文献。换个词，或把标签、空白和状态改回「全部」。</p>';
       return;
     }
     list.innerHTML = shown.map(topicPaperCard).join('');
@@ -700,6 +753,15 @@
       statuses.map(function (status) {
         return chip(status, state.topicStatus === status, 'data-topic-filter="status" data-value="' + esc(status) + '"', 0);
       }).join('');
+    const gaps = gapOptions(topic);
+    const gapChips = chip('全部', state.topicGap === '', 'data-topic-filter="gap" data-value=""', 0) +
+      gaps.map(function (gap) {
+        return chip(gap.label, state.topicGap === gap.id, 'data-topic-filter="gap" data-value="' + esc(gap.id) + '"', 0);
+      }).join('');
+    const catalog = topic.gapsMd
+      ? '<h2 class="section-title" id="topic-gaps">空白目录</h2>' +
+        '<article class="markdown gap-catalog">' + renderMarkdown(topic.gapsMd) + '</article>'
+      : '';
     app.innerHTML =
       '<section id="topic">' +
         '<p class="back"><a href="#/topics">返回专题</a></p>' +
@@ -707,14 +769,19 @@
         '<h2 class="view-title">' + esc(topic.title) + '</h2>' +
         '<p class="view-lead">这是专项摸底，不是某期摘要' +
           (topic.date ? '（' + esc(topic.date) + '）' : '') +
-        '。</p>' +
+        '。专题 = 按问题整理的摸底；各期摘要 = 按日期扫文献。</p>' +
         '<article class="markdown">' + renderMarkdown(topic.brief) + '</article>' +
+        catalog +
         '<h2 class="section-title" id="topic-papers">专项文献</h2>' +
-        '<p class="topic-note">这张表只属于这个专题，不并进主文献表，也不是某一期摘要。</p>' +
+        '<p class="topic-note">这张表只属于这个专题，不并进主文献表，也不是某一期摘要。按空白编号看它挂在哪一条上。</p>' +
         '<div class="filters">' +
           '<div class="filter-row">' +
             '<label class="filter-label" for="topic-q">搜索</label>' +
             '<input id="topic-q" type="search" placeholder="题目、作者或备注" autocomplete="off" spellcheck="false" enterkeyhint="search" value="' + esc(state.topicQ) + '">' +
+          '</div>' +
+          '<div class="filter-row" role="group" aria-label="空白">' +
+            '<span class="filter-label">空白</span>' +
+            '<div class="chips">' + gapChips + '</div>' +
           '</div>' +
           '<div class="filter-row" role="group" aria-label="标签">' +
             '<span class="filter-label">标签</span>' +
@@ -885,16 +952,23 @@
       return Promise.all(manifest.map(function (item) {
         if (!item || !/^[a-z0-9-]+$/.test(item.id)) return null;
         if (!/^[A-Za-z0-9._-]+$/.test(item.brief) || !/^[A-Za-z0-9._-]+$/.test(item.index)) return null;
+        const gapsName = item.gaps && /^[A-Za-z0-9._-]+$/.test(item.gaps) ? item.gaps : '';
+        const gapsJob = gapsName
+          ? fetchText('data/topics/' + gapsName).catch(function () { return ''; })
+          : Promise.resolve('');
         return Promise.all([
           fetchText('data/topics/' + item.brief),
-          fetchText('data/topics/' + item.index)
+          fetchText('data/topics/' + item.index),
+          gapsJob
         ]).then(function (pair) {
           return {
             id: item.id,
             title: item.title || item.id,
             date: /^\d{4}-\d{2}-\d{2}$/.test(item.date) ? item.date : '',
             brief: pair[0],
-            papers: DigestParse.parseIndex(pair[1], 'flexible')
+            papers: DigestParse.parseIndex(pair[1], 'flexible'),
+            gapsMd: pair[2] || '',
+            gaps: pair[2] ? DigestParse.parseGapCatalog(pair[2]) : []
           };
         });
       })).then(function (rows) {

@@ -479,6 +479,19 @@ details[open] .when-open { display: inline; }
 
 .topic-card { box-shadow: inset 3px 0 0 #3d2a4a; }
 
+.gap-badge {
+  border-radius: 999px;
+  padding: 0.08rem 0.48rem;
+  background: #f6f1e8;
+  color: #3d2a4a;
+  border: 1px solid #d9cfe0;
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  line-height: 1.7;
+}
+
+.gap-catalog { margin-bottom: 0.4rem; }
+
 .topic-card-title {
   font-family: var(--serif);
   font-size: 1.12rem;

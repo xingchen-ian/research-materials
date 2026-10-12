@@ -28,9 +28,9 @@
 
 专题和各期摘要分开。专题按问题整理摸底；各期摘要按日期扫文献。专题文献不要写进 `data/digest-index.md`。
 
-清单在 `data/topics/index.json`。每一项写 `id`、`title`、`date`、`brief`、`index`。`brief` 和 `index` 只写文件名，文件放在 `data/topics/`。`id` 用小写字母、数字和 `-`。
+清单在 `data/topics/index.json`。每一项写 `id`、`title`、`date`、`brief`、`index`，可选 `gaps`（空白目录文件名）。这些都只写文件名，文件放在 `data/topics/`。`id` 用小写字母、数字和 `-`。
 
-打开 `#/topics`。点进一张卡片，上面是摸底简报，下面是这张专题表自己的文献，可以按标签和状态筛。
+打开 `#/topics`。点进一张卡片，上面是摸底简报和空白目录，下面是这张专题表自己的文献，可以按空白编号、标签和状态筛。人机协作专题的文献表有「填补空白」和「新空白」两列；对不上就写「待归类」。不要把这些篇并进 `data/digest-index.md`。
 
 ## 每篇文献的文件名
 
