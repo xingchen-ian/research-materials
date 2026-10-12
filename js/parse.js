@@ -200,7 +200,7 @@
     const text = String(markdown || '').replace(/^\uFEFF/, '');
     const h1Match = text.match(/^#\s+(.+)$/m);
     const h1 = h1Match ? h1Match[1].trim() : '';
-    const noMatch = h1.match(/第\s*(\d+)\s*期/);
+    const noMatch = h1.match(/第\s*(\d+[a-z]?)\s*期/);
     const conclMatch = text.match(/\*{0,2}本期结论\*{0,2}\s*[：:]\*{0,2}\s*(.+)/);
     let conclusion = conclMatch ? conclMatch[1].trim() : '';
     conclusion = conclusion.replace(/\*+/g, '').trim();

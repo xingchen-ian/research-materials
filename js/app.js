@@ -886,8 +886,8 @@
         }
         if (!Array.isArray(manifest)) throw new Error('data/briefs/index.json 应该是一个列表。');
         const jobs = manifest.map(function (item) {
-          if (!item || !/^\d{4}-\d{2}-\d{2}$/.test(item.date) || !/^[A-Za-z0-9._-]+$/.test(item.file)) {
-            throw new Error('index.json 里有一行格式不对。需要 date（YYYY-MM-DD）和 file。');
+          if (!item || !/^\d{4}-\d{2}-\d{2}[a-z]?$/.test(item.date) || !/^[A-Za-z0-9._-]+$/.test(item.file)) {
+            throw new Error('index.json 里有一行格式不对。需要 date（YYYY-MM-DD，可加一个小写字母）和 file。');
           }
           return fetchText('data/briefs/' + item.file).then(function (md) {
             const meta = DigestParse.parseIssueMeta(md);
