@@ -163,7 +163,7 @@
         current = null;
         continue;
       }
-      if (/^\d+\.\s+/.test(line)) {
+      if (/^\d+\.\s+/.test(line) || (/^[-*+]\s+/.test(line) && /10\.\d{4,9}\//.test(line))) {
         if (current) blocks.push(current);
         current = [line];
         continue;
